@@ -105,6 +105,11 @@
 	}
 
 	async function loadAssets() {
+		// Reset error states before attempting to load
+		error = false;
+		authError = false;
+		errorMessage = '';
+
 		try {
 			let assetRequest = await api.getAsset();
 
@@ -113,13 +118,22 @@
 					authError = true;
 				}
 				error = true;
+				errorMessage = 'Failed to load assets from Immich server.';
 				return;
 			}
 
-			error = false;
 			assetBacklog = assetRequest.data;
-		} catch {
+
+			// Check if the successful response is empty
+			if (assetBacklog.length === 0) {
+				error = true;
+				errorMessage = 'No assets were found! Check your configuration.';
+			}
+		} catch (e) {
 			error = true;
+			authError = false;
+			errorMessage = 'Failed to connect to ImmichFrame backend or Immich server.';
+			console.error('Error loading assets:', e);
 		}
 	}
 
@@ -166,7 +180,7 @@
 		}
 
 		displayingAssets = next;
-		updateImagePromises();
+		await updateImagePromises();
 		imagesState = await loadImages(next);
 	}
 
@@ -231,6 +245,9 @@
 		try {
 			for (let asset of assets) {
 				let img = await imagePromisesDict[asset.id];
+				if (!img[0]) {
+					throw new Error(`Failed to load image data for asset ID: ${asset.id}`);
+				}
 				newImages.push(img);
 			}
 			return {
@@ -240,7 +257,8 @@
 				split: assets.length == 2,
 				hasBday: hasBirthday(assets)
 			};
-		} catch {
+		} catch (e) {
+			console.error('Error loading image data:', e);
 			return {
 				images: [],
 				error: true,
